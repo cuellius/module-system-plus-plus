@@ -90,7 +90,7 @@ void ModuleSystem::UnloadPythonInterpreter()
 void ModuleSystem::SetConsoleColor(int color)
 {
 #if defined _WIN32
-	SetConsoleTextAttribute(m_console_handle, (color & 0xF) | (m_console_info.wAttributes & 0xF0) );
+	SetConsoleTextAttribute(m_console_handle, (color & 0xF) | (m_console_info.wAttributes & 0xF0));
 #else
 	std::cout << "\033[0;" << color << "m";
 #endif
@@ -124,7 +124,7 @@ void ModuleSystem::Compile(unsigned long long flags)
 
 	try
 	{
-		if (!(m_flags & msf_skip_id_files))
+		if (!(m_flags & MSF_SKIP_ID_FILES))
 		{
 			m_pass = 1;
 			DoCompile();
@@ -164,38 +164,16 @@ void ModuleSystem::Compile(unsigned long long flags)
 	gettimeofday(&t2, NULL);
 #endif
 
-	if (m_flags & msf_list_resources)
+	if (m_flags & MSF_LIST_RESOURCES)
 	{
 		std::ofstream res_stream(m_output_path + "resource_usage.txt");
 
-		for (auto res_type_it = m_resources.begin(); res_type_it != m_resources.end(); ++res_type_it)
+		std::string res_type_to_str[] = { "Meshes", "Materials", "Skeleton Models", "Bodies", "Skeleton Animations" };
+		for (auto & resource : m_resources)
 		{
-			std::string res_type;
-
-			switch (res_type_it->first)
-			{
-			case res_mesh:
-				res_type = "Meshes";
-				break;
-			case res_material:
-				res_type = "Materials";
-				break;
-			case res_skeleton:
-				res_type = "Skeleton Models";
-				break;
-			case res_body:
-				res_type = "Bodies";
-				break;
-			case res_animation:
-				res_type = "Skeleton Animations";
-				break;
-			}
-
+			std::string res_type = res_type_to_str[resource.first];
 			res_stream << "== " << res_type << " ==" << std::endl;
-
-			for (auto res_it = res_type_it->second.begin(); res_it != res_type_it->second.end(); ++res_it) 
-				res_stream << res_it->first << ' ' << res_it->second << std::endl;
-
+			for (auto & res_it : resource.second) res_stream << res_it.first << ' ' << res_it.second << std::endl;
 			res_stream << std::endl;
 		}
 	}
@@ -216,17 +194,15 @@ void ModuleSystem::Compile(unsigned long long flags)
 void ModuleSystem::DoCompile()
 {
 	if (m_output_path.empty()) m_output_path = CPyModule("module_info").GetAttr("export_dir").Str();
-
 	trim(m_output_path);
-
 	if (m_output_path.length() && m_output_path[m_output_path.length() - 1] != PATH_SEPARATOR) m_output_path.push_back(PATH_SEPARATOR);
 
 	if (m_pass == 2)
 	{
 		std::cout << "Initializing compiler..." << std::endl;
 
-		memset(m_operations, 0, max_num_opcodes * sizeof(unsigned int));
-		memset(m_operation_depths, 0, max_num_opcodes * sizeof(int));
+		memset(m_operations, 0, MAX_NUM_OPCODES * sizeof(unsigned int));
+		memset(m_operation_depths, 0, MAX_NUM_OPCODES * sizeof(int));
 
 		m_operation_depths[3] = -1; // try_end
 		m_operation_depths[4] = 1; // try_begin
@@ -244,11 +220,11 @@ void ModuleSystem::DoCompile()
 		CPyIter ghs_operations_iter = header_operations.GetAttr("global_lhs_operations").GetIter();
 		CPyIter cf_operations_iter = header_operations.GetAttr("can_fail_operations").GetIter();
 
-		while (lhs_operations_iter.HasNext()) m_operations[OPCODE(lhs_operations_iter.Next().AsLong())] |= optype_lhs;
-		while (ghs_operations_iter.HasNext()) m_operations[OPCODE(ghs_operations_iter.Next().AsLong())] |= optype_ghs;
-		while (cf_operations_iter.HasNext()) m_operations[OPCODE(cf_operations_iter.Next().AsLong())] |= optype_cf;
+		while (lhs_operations_iter.HasNext()) m_operations[OPCODE(lhs_operations_iter.Next().AsLong())] |= OPTYPE_LHS;
+		while (ghs_operations_iter.HasNext()) m_operations[OPCODE(ghs_operations_iter.Next().AsLong())] |= OPTYPE_GHS;
+		while (cf_operations_iter.HasNext()) m_operations[OPCODE(cf_operations_iter.Next().AsLong())] |= OPTYPE_CF;
 
-		if (!(m_flags * msf_obfuscate_global_vars))
+		if (!(m_flags * MSF_OBFUSCATE_GLOBAL_VARS))
 		{
 			std::ifstream global_var_stream("variables.txt");
 
@@ -306,7 +282,7 @@ void ModuleSystem::DoCompile()
 	m_triggers = AddModule("triggers", "");
 	m_troops = AddModule("troops", "trp", 5);
 
-	if (m_flags & msf_compile_module_data)
+	if (m_flags & MSF_COMPILE_MODULE_DATA)
 	{
 		m_flora_kinds = AddModule("flora_kinds", "fauna_kinds", "");
 		m_skyboxes = AddModule("skyboxes", "skyboxes", "");
@@ -343,7 +319,7 @@ void ModuleSystem::DoCompile()
 		WriteDialogs();
 		WritePostEffects();
 
-		if (m_flags & msf_compile_module_data)
+		if (m_flags & MSF_COMPILE_MODULE_DATA)
 		{
 			WriteFloraKinds();
 			WriteSkyboxes();
@@ -353,19 +329,19 @@ void ModuleSystem::DoCompile()
 		WriteQuickStrings();
 		WriteGlobalVars();
 
-		for (auto it = m_global_vars.begin(); it != m_global_vars.end(); ++it)
+		for (auto & var : m_global_vars)
 		{
-			if (!it->second.compat && it->second.assignments == 0) Warning(wl_warning, "usage of unassigned global variable $" + it->first);
-			if (!it->second.compat && it->second.usages == 0) Warning(wl_warning, "unused global variable $" + it->first);
+			if (!var.second.compat && var.second.assignments == 0) Warning(WL_WARNING, "usage of unassigned global variable $" + var.first);
+			if (!var.second.compat && var.second.usages == 0) Warning(WL_WARNING, "unused global variable $" + var.first);
 		}
 
-		if (m_flags & msf_list_unreferenced_scripts)
+		if (m_flags & MSF_LIST_UNREFERENCED_SCRIPTS)
 		{
-			std::map<std::string, int> &uses_map = m_uses["script"];
+			auto& uses_map = m_uses["script"];
 
-			for (auto it = uses_map.begin(); it != uses_map.end(); ++it)
+			for (auto & it : uses_map)
 			{
-				if (!it->second && it->first.find("game_") && it->first.find("wse_")) Warning(wl_warning, "unreferenced script " + it->first);
+				if (!it.second && it.first.find("game_") && it.first.find("wse_")) Warning(WL_WARNING, "unreferenced script " + it.first);
 			}
 		}
 	}
@@ -387,10 +363,10 @@ CPyList ModuleSystem::AddModule(const std::string &module_name, const std::strin
 			CPyObject item = list[i];
 			std::string name;
 
-			if (item.IsTuple() || item.IsList()) 
+			if (item.IsTuple() || item.IsList())
 				name = item[0].AsString();
-			else 
-				Warning(wl_critical, "unrecognized list format for " + list_name, module_name_full);
+			else
+				Warning(WL_CRITICAL, "unrecognized list format for " + list_name, module_name_full);
 
 			std::transform(name.begin(), name.end(), name.begin(), ::tolower);
 
@@ -399,7 +375,7 @@ CPyList ModuleSystem::AddModule(const std::string &module_name, const std::strin
 				if (m_ids[prefix].find(name) == m_ids[prefix].end())
 					m_ids[prefix][name] = i;
 				else
-					Warning(wl_warning, "duplicate entry " + prefix + "_" + name, module_name_full);
+					Warning(WL_WARNING, "duplicate entry " + prefix + "_" + name, module_name_full);
 
 				m_uses[prefix][name] = 0;
 			}
@@ -407,14 +383,14 @@ CPyList ModuleSystem::AddModule(const std::string &module_name, const std::strin
 			ids[i] = name;
 		}
 
-		if (m_pass == 1 && !(m_flags & msf_skip_id_files))
+		if (m_pass == 1 && !(m_flags & MSF_SKIP_ID_FILES))
 		{
 			std::ofstream stream(m_input_path + "ID_" + id_name + ".py");
 
 			for (int i = 0; i < num_entries; ++i) stream << id_prefix << "_" << ids[i] << " = " << i << std::endl;
 		}
 
-		if (m_pass == 2 && tag > 0 && ((!(m_flags & msf_obfuscate_tags)) || prefix == "str"))
+		if (m_pass == 2 && tag > 0 && ((!(m_flags & MSF_OBFUSCATE_TAGS)) || prefix == "str"))
 			m_tags[prefix] = (unsigned long long)tag << 56;
 	}
 
@@ -443,15 +419,15 @@ int ModuleSystem::GetId(const std::string &type, const CPyObject &obj, const std
 
 		std::string value = str.substr(0, prefix.length()) != prefix ? str : str.substr(prefix.length() + 1);
 
-		if (m_ids.find(prefix) == m_ids.end()) Warning(wl_error, "unrecognized identifier prefix " + prefix, context);
-		if (m_ids[prefix].find(value) == m_ids[prefix].end()) Warning(wl_error, "unrecognized identifier " + str, context);
+		if (m_ids.find(prefix) == m_ids.end()) Warning(WL_ERROR, "unrecognized identifier prefix " + prefix, context);
+		if (m_ids[prefix].find(value) == m_ids[prefix].end()) Warning(WL_ERROR, "unrecognized identifier " + str, context);
 
 		return m_ids[prefix][value];
 	}
-	else if (obj.IsLong())
+	if (obj.IsLong())
 		return (long)obj.AsLong();
 
-	Warning(wl_critical, "unrecognized identifier type " + (std::string)obj.Type().Str() + " for " + (std::string)obj.Str(), context);
+	Warning(WL_CRITICAL, "unrecognized identifier type " + (std::string)obj.Type().Str() + " for " + (std::string)obj.Str(), context);
 	return -1;
 }
 
@@ -462,7 +438,7 @@ unsigned long long ModuleSystem::GetOperandId(const CPyObject &obj, const std::s
 		std::string str = obj.AsString();
 		ssize_t underscore_pos = str.find('_');
 
-		if (underscore_pos < 0) Warning(wl_error, "invalid identifier " + str, context);
+		if (underscore_pos < 0) Warning(WL_ERROR, "invalid identifier " + str, context);
 
 		std::string prefix = str.substr(0, underscore_pos);
 		std::string value = str.substr(underscore_pos + 1);
@@ -470,16 +446,16 @@ unsigned long long ModuleSystem::GetOperandId(const CPyObject &obj, const std::s
 		std::transform(prefix.begin(), prefix.end(), prefix.begin(), ::tolower);
 		std::transform(value.begin(), value.end(), value.begin(), ::tolower);
 
-		if (m_ids.find(prefix) == m_ids.end()) Warning(wl_error, "unrecognized identifier prefix " + prefix, context);
-		if (m_ids[prefix].find(value) == m_ids[prefix].end()) Warning(wl_error, "unrecognized identifier " + str, context);
+		if (m_ids.find(prefix) == m_ids.end()) Warning(WL_ERROR, "unrecognized identifier prefix " + prefix, context);
+		if (m_ids[prefix].find(value) == m_ids[prefix].end()) Warning(WL_ERROR, "unrecognized identifier " + str, context);
 
 		m_uses[prefix][value]++;
 		return m_ids[prefix][value] | m_tags[prefix];
 	}
-	else if (obj.IsLong())
+	if (obj.IsLong())
 		return obj.AsLong();
 
-	Warning(wl_critical, "unrecognized identifier type " + (std::string)obj.Type().Str() + " for " + (std::string)obj.Str(), context);
+	Warning(WL_CRITICAL, "unrecognized identifier type " + (std::string)obj.Type().Str() + " for " + (std::string)obj.Str(), context);
 	return -1;
 }
 
@@ -492,16 +468,15 @@ std::string ModuleSystem::GetResource(const CPyObject &obj, int resource_type, c
 		if (resource_name != "0" && resource_name != "none")
 		{
 			if (m_resources[resource_type].find(resource_name) == m_resources[resource_type].end()) m_resources[resource_type][resource_name] = 0;
-
 			m_resources[resource_type][resource_name]++;
 		}
 
 		return resource_name;
 	}
-	else if (obj.IsLong())
+	if (obj.IsLong())
 		return obj.Str();
 
-	Warning(wl_critical, "unrecognized resource type " + (std::string)obj.Type().Str() + " for " + (std::string)obj.Str(), context);
+	Warning(WL_CRITICAL, "unrecognized resource type " + (std::string)obj.Type().Str() + " for " + (std::string)obj.Str(), context);
 	return "0";
 }
 
@@ -527,15 +502,15 @@ long long ModuleSystem::ParseOperand(const CPyObject &statement, int pos)
 				m_local_vars[value].assignments = 1;
 				m_local_vars[value].usages = 0;
 
-				if (pos != 1 || !(m_operations[OPCODE(statement[0].AsLong())] & optype_lhs))
+				if (pos != 1 || !(m_operations[OPCODE(statement[0].AsLong())] & OPTYPE_LHS))
 				{
-					Warning(wl_error, "usage of unassigned local variable :" + value, m_cur_context + ", statement " + itostr(m_cur_statement));
+					Warning(WL_ERROR, "usage of unassigned local variable :" + value, m_cur_context + ", statement " + itostr(m_cur_statement));
 					m_local_vars[value].usages = 1;
 				}
 			}
 			else
 			{
-				if (pos == 1 && m_operations[OPCODE(statement[0].AsLong())] & optype_lhs)
+				if (pos == 1 && m_operations[OPCODE(statement[0].AsLong())] & OPTYPE_LHS)
 					m_local_vars[value].assignments++;
 				else
 					m_local_vars[value].usages++;
@@ -543,11 +518,11 @@ long long ModuleSystem::ParseOperand(const CPyObject &statement, int pos)
 				index = m_local_vars[value].index;
 			}
 
-			if (m_local_vars.size() > 128) Warning(wl_error, "maximum amount of local variables (128) exceeded", m_cur_context + ", statement " + itostr(m_cur_statement));
+			if (m_local_vars.size() > 128) Warning(WL_ERROR, "maximum amount of local variables (128) exceeded", m_cur_context + ", statement " + itostr(m_cur_statement));
 
-			return index | opmask_local_variable;
+			return index | OPMASK_LOCAL_VARIABLE;
 		}
-		else if (str[0] == '$')
+		if (str[0] == '$')
 		{
 			std::string value = str.substr(1);
 			int index;
@@ -557,14 +532,14 @@ long long ModuleSystem::ParseOperand(const CPyObject &statement, int pos)
 				index = (int)m_global_vars.size();
 				m_global_vars[value].index = index;
 
-				if (pos == 1 && m_operations[OPCODE(statement[0].AsLong())] & (optype_lhs | optype_ghs))
+				if (pos == 1 && m_operations[OPCODE(statement[0].AsLong())] & (OPTYPE_LHS | OPTYPE_GHS))
 					m_global_vars[value].assignments = 1;
 				else
 					m_global_vars[value].usages = 1;
 			}
 			else
 			{
-				if (pos == 1 && m_operations[OPCODE(statement[0].AsLong())] & (optype_lhs | optype_ghs))
+				if (pos == 1 && m_operations[OPCODE(statement[0].AsLong())] & (OPTYPE_LHS | OPTYPE_GHS))
 					m_global_vars[value].assignments++;
 				else
 					m_global_vars[value].usages++;
@@ -573,9 +548,9 @@ long long ModuleSystem::ParseOperand(const CPyObject &statement, int pos)
 				index = m_global_vars[value].index;
 			}
 
-			return index | opmask_global_variable;
+			return index | OPMASK_GLOBAL_VARIABLE;
 		}
-		else if (str[0] == '@')
+		if (str[0] == '@')
 		{
 			std::string id = encode_full(str.substr(1));
 			std::string text = encode_str(str.substr(1));
@@ -585,20 +560,18 @@ long long ModuleSystem::ParseOperand(const CPyObject &statement, int pos)
 			do
 			{
 				auto_id = "qstr_" + id.substr(0, auto_id_len++);
-			}
-			while (auto_id_len <= id.length() && (m_quick_strings.find(auto_id) != m_quick_strings.end() && m_quick_strings[auto_id].value != text));
+			} while (auto_id_len <= id.length() && (m_quick_strings.find(auto_id) != m_quick_strings.end() && m_quick_strings[auto_id].value != text));
 
 			if (auto_id_len > id.length())
 			{
 				std::string new_auto_id = auto_id;
 				int i = 1;
+				char buffer[20];
 
 				while (m_quick_strings.find(new_auto_id) != m_quick_strings.end() && m_quick_strings[new_auto_id].value != text)
 				{
-					std::ostringstream oss;
-
-					oss << auto_id << i++;
-					new_auto_id = oss.str();
+					_itoa(i++, buffer, 10);
+					new_auto_id = auto_id + buffer;
 				}
 
 				auto_id = std::move(new_auto_id);
@@ -612,19 +585,16 @@ long long ModuleSystem::ParseOperand(const CPyObject &statement, int pos)
 				m_quick_strings[auto_id].value = std::move(text);
 			}
 
-			return m_quick_strings[auto_id].index | opmask_quick_string;
+			return m_quick_strings[auto_id].index | OPMASK_QUICK_STRING;
 		}
-		else
-		{
-			return GetOperandId(operand, m_cur_context + ", statement " + itostr(m_cur_statement));
-		}
+		return GetOperandId(operand, m_cur_context + ", statement " + itostr(m_cur_statement));
 	}
-	else if (operand.IsLong())
+	if (operand.IsLong())
 		return operand.AsLong();
-	else if (operand.IsFloat())
+	if (operand.IsFloat())
 		return (long long)((double)operand.AsFloat());
 
-	Warning(wl_critical, "unrecognized operand type " + (std::string)operand.Type().Str() + " for " + (std::string)operand.Str(), m_cur_context + ", statement " + itostr(m_cur_statement));
+	Warning(WL_CRITICAL, "unrecognized operand type " + (std::string)operand.Type().Str() + " for " + (std::string)operand.Str(), m_cur_context + ", statement " + itostr(m_cur_statement));
 	return -1;
 }
 
@@ -639,24 +609,22 @@ void ModuleSystem::Warning(int level, const std::string &text, const std::string
 
 	if (!context.empty()) error += " at " + context;
 
-	if (level == wl_critical || (level == wl_error && m_flags & msf_strict)) throw CompileException(error);
+	if (level == WL_CRITICAL || (level == WL_ERROR && m_flags & MSF_STRICT)) throw CompileException(error);
 
-	if(!(m_flags & msf_disable_warnings))
+	if (!(m_flags & MSF_DISABLE_WARNINGS))
 	{
-		if (level == wl_warning)
+		if (level == WL_WARNING)
 		{
 			SetConsoleColor(COLOR_YELLOW);
 			std::cout << "WARNING: ";
-			ResetConsoleColor();
-			std::cout << error << std::endl;
 		}
-		else if (level == wl_error)
+		else if (level == WL_ERROR)
 		{
 			SetConsoleColor(COLOR_RED);
 			std::cout << "ERROR: ";
-			ResetConsoleColor();
-			std::cout << error << std::endl;
 		}
+		ResetConsoleColor();
+		std::cout << error << std::endl;
 	}
 }
 
@@ -689,7 +657,7 @@ void ModuleSystem::WriteAnimations()
 
 			stream << std::endl << "  ";
 			stream << sequence[0] << ' ';
-			stream << GetResource(sequence[1], res_animation, name) << ' ';
+			stream << GetResource(sequence[1], RES_ANIMATION, name) << ' ';
 			stream << sequence[2] << ' ';
 			stream << sequence[3] << ' ';
 			stream << sequence[4] << ' ';
@@ -770,7 +738,7 @@ void ModuleSystem::WriteDialogs() // TODO: optimize
 		{
 			states.insert({ input_token, num_states++ });
 
-			if (m_flags & msf_obfuscate_dialog_states)
+			if (m_flags & MSF_OBFUSCATE_DIALOG_STATES)
 				states_stream << "state_" << states[input_token] << std::endl;
 			else
 				states_stream << input_token << std::endl;
@@ -780,7 +748,7 @@ void ModuleSystem::WriteDialogs() // TODO: optimize
 		{
 			states.insert({ output_token, num_states++ });
 
-			if (m_flags & msf_obfuscate_dialog_states)
+			if (m_flags & MSF_OBFUSCATE_DIALOG_STATES)
 				states_stream << "state_" << states[output_token] << std::endl;
 			else
 				states_stream << output_token << std::endl;
@@ -805,16 +773,14 @@ void ModuleSystem::WriteDialogs() // TODO: optimize
 		auto_id = std::move(new_auto_id);
 		dialog_ids[auto_id] = text;
 
-		if (states.find(input_token) == states.end())
-			Warning(wl_error, "input token not found: " + input_token, auto_id);
+		if (states.find(input_token) == states.end()) Warning(WL_ERROR, "input token not found: " + input_token, auto_id);
 
 		stream << auto_id << ' ';
 		stream << sentence[0] << ' ';
 		stream << states[input_token] << ' ';
 		WriteStatementBlock(sentence[2], stream, auto_id);
 
-		if (text.empty())
-			text = "NO_TEXT";
+		if (text.empty()) text = "NO_TEXT";
 
 		stream << text << ' ';
 		stream << states[output_token] << ' ';
@@ -926,14 +892,14 @@ void ModuleSystem::WriteFloraKinds()
 		{
 			CPyObject mesh = meshes_iter.Next();
 
-			stream << GetResource(mesh[0], res_mesh, name) << ' ';
+			stream << GetResource(mesh[0], RES_MESH, name) << ' ';
 
-			stream << (mesh.Len() > 1 ? GetResource(mesh[1], res_body, name) : "0") << ' ';
+			stream << (mesh.Len() > 1 ? GetResource(mesh[1], RES_BODY, name) : "0") << ' ';
 
 			if (flags & 0x02400000)
 			{
-				stream << GetResource(mesh[2][0], res_mesh, name) << ' ';
-				stream << GetResource(mesh[2][1], res_body, name) << ' ';
+				stream << GetResource(mesh[2][0], RES_MESH, name) << ' ';
+				stream << GetResource(mesh[2][1], RES_BODY, name) << ' ';
 			}
 		}
 
@@ -953,12 +919,12 @@ void ModuleSystem::WriteGlobalVars()
 
 	std::ofstream stream(m_output_path + "variables.txt");
 	std::vector<std::string> global_vars(m_global_vars.size());
-
-	for (auto it = m_global_vars.begin(); it != m_global_vars.end(); ++it) global_vars[it->second.index] = it->first;
+	
+	for (auto & var : m_global_vars) global_vars[var.second.index] = var.first;
 
 	for (size_t i = 0; i < global_vars.size(); ++i)
 	{
-		if (m_flags & msf_obfuscate_global_vars)
+		if (m_flags & MSF_OBFUSCATE_GLOBAL_VARS)
 			stream << "global_var_" << i << std::endl;
 		else
 			stream << global_vars[i] << std::endl;
@@ -980,9 +946,9 @@ void ModuleSystem::WriteGroundSpecs()
 
 		stream << name << ' ';
 		stream << flags << ' ';
-		stream << GetResource(ground_spec[2], res_material, name) << ' ';
+		stream << GetResource(ground_spec[2], RES_MATERIAL, name) << ' ';
 		stream << ground_spec[3] << ' ';
-		stream << GetResource(ground_spec[4], res_material, name) << ' ';
+		stream << GetResource(ground_spec[4], RES_MATERIAL, name) << ' ';
 
 		if (flags & 0x4)
 		{
@@ -1040,7 +1006,7 @@ void ModuleSystem::WriteItems()
 
 		if (num_variations > 16)
 		{
-			Warning(wl_warning, "item variation count exceeds 16", name);
+			Warning(WL_WARNING, "item variation count exceeds 16", name);
 			num_variations = 16;
 		}
 
@@ -1050,7 +1016,7 @@ void ModuleSystem::WriteItems()
 		{
 			CPyObject variation = variations[i];
 
-			stream << GetResource(variation[0], res_mesh, name) << ' ';
+			stream << GetResource(variation[0], RES_MESH, name) << ' ';
 			stream << variation[1] << ' ';
 		}
 
@@ -1076,13 +1042,13 @@ void ModuleSystem::WriteItems()
 
 		if (abundance == 0) abundance = 100;
 
-		if (m_flags & msf_rusmod_rebalanser)
+		if (m_flags & MSF_RUSMOD_REBALANSER)
 		{
 			const unsigned short itp_type_head_armor = 0xc;
 			const unsigned short itp_type_body_armor = 0xd;
 
-			unsigned short type = (item[3].AsNumber()) & 0xF;
-			
+			unsigned short type = item[3].AsNumber() & 0xF;
+
 			if (type == itp_type_head_armor)
 			{
 				double l = 4 * weight + 4;
@@ -1119,7 +1085,7 @@ void ModuleSystem::WriteItems()
 
 			if (num_factions > 16)
 			{
-				Warning(wl_warning, "item faction count exceeds 16", name);
+				Warning(WL_WARNING, "item faction count exceeds 16", name);
 				num_factions = 16;
 			}
 
@@ -1154,7 +1120,7 @@ void ModuleSystem::WriteMapIcons()
 
 		stream << name << ' ';
 		stream << map_icon[1] << ' ';
-		stream << GetResource(map_icon[2], res_mesh, name) << ' ';
+		stream << GetResource(map_icon[2], RES_MESH, name) << ' ';
 		stream << map_icon[3] << ' ';
 		stream << GetId("snd", map_icon[4], name) << ' ';
 
@@ -1200,7 +1166,7 @@ void ModuleSystem::WriteMenus()
 		stream << name << ' ';
 		stream << menu[1] << ' ';
 		stream << encode_str(menu[2].AsString()) << ' ';
-		stream << GetResource(menu[3], res_mesh, name) << ' ';
+		stream << GetResource(menu[3], RES_MESH, name) << ' ';
 		WriteStatementBlock(menu[4], stream, name);
 
 		CPyObject items = menu[5];
@@ -1245,7 +1211,7 @@ void ModuleSystem::WriteMeshes()
 
 		stream << name << ' ';
 		stream << mesh[1] << ' ';
-		stream << GetResource(mesh[2], res_mesh, name) << ' ';
+		stream << GetResource(mesh[2], RES_MESH, name) << ' ';
 		stream << mesh[3] << ' ';
 		stream << mesh[4] << ' ';
 		stream << mesh[5] << ' ';
@@ -1302,7 +1268,7 @@ void ModuleSystem::WriteMissionTemplates()
 
 				if (num_overrides > 8)
 				{
-					Warning(wl_warning, "item override count exceeds 8", name + ", group " + itostr(j));
+					Warning(WL_WARNING, "item override count exceeds 8", name + ", group " + itostr(j));
 					num_overrides = 8;
 				}
 
@@ -1357,7 +1323,7 @@ void ModuleSystem::WriteParticleSystems()
 
 		stream << name << ' ';
 		stream << particle_system[1] << ' ';
-		stream << GetResource(particle_system[2], res_mesh, name) << ' ';
+		stream << GetResource(particle_system[2], RES_MESH, name) << ' ';
 		stream << particle_system[3] << ' ';
 		stream << particle_system[4] << ' ';
 		stream << particle_system[5] << ' ';
@@ -1496,7 +1462,7 @@ void ModuleSystem::WritePartyTemplates()
 
 		if (num_members > 6)
 		{
-			Warning(wl_warning, "party template member count exceeds 6", name);
+			Warning(WL_WARNING, "party template member count exceeds 6", name);
 			num_members = 6;
 		}
 
@@ -1514,7 +1480,7 @@ void ModuleSystem::WritePartyTemplates()
 				stream << "0 ";
 		}
 
-		for (int i = num_members; i < 6; ++i) stream << "-1 "; 
+		for (int i = num_members; i < 6; ++i) stream << "-1 ";
 
 		stream << std::endl;
 	}
@@ -1603,7 +1569,7 @@ void ModuleSystem::WriteQuickStrings()
 	std::ofstream stream(m_output_path + "quick_strings.txt");
 	std::vector<std::string> quick_strings(m_quick_strings.size());
 
-	for (auto it = m_quick_strings.begin(); it != m_quick_strings.end(); ++it) quick_strings[it->second.index] = it->first;
+	for (auto & quick_string : m_quick_strings) quick_strings[quick_string.second.index] = quick_string.first;
 
 	stream << quick_strings.size() << std::endl;
 
@@ -1632,8 +1598,8 @@ void ModuleSystem::WriteSceneProps()
 		stream << name << ' ';
 		stream << scene_prop[1] << ' ';
 		stream << (((unsigned long long)scene_prop[1].AsLong() >> 20) & 0xFF) << ' ';
-		stream << GetResource(scene_prop[2], res_mesh, name) << ' ';
-		stream << GetResource(scene_prop[3], res_body, name) << ' ';
+		stream << GetResource(scene_prop[2], RES_MESH, name) << ' ';
+		stream << GetResource(scene_prop[3], RES_BODY, name) << ' ';
 		WriteSimpleTriggerBlock(scene_prop[4], stream, name);
 	}
 }
@@ -1656,8 +1622,8 @@ void ModuleSystem::WriteScenes()
 		stream << name << ' ';
 		stream << encode_str(scene[0].AsString()) << ' ';
 		stream << scene[1] << ' ';
-		stream << GetResource(scene[2], res_mesh, name) << ' ';
-		stream << GetResource(scene[3], res_body, name) << ' ';
+		stream << GetResource(scene[2], RES_MESH, name) << ' ';
+		stream << GetResource(scene[3], RES_BODY, name) << ' ';
 		stream << scene[4][0] << ' ';
 		stream << scene[4][1] << ' ';
 		stream << scene[5][0] << ' ';
@@ -1713,7 +1679,7 @@ void ModuleSystem::WriteScripts()
 	PrepareModule("scripts");
 	std::ofstream table_stream;
 
-	if (m_flags & msf_obfuscate_scripts && m_flags & msf_list_obfuscated_scripts) table_stream.open(m_output_path + "obfuscated_scripts.txt");
+	if (m_flags & MSF_OBFUSCATE_SCRIPTS && m_flags & MSF_LIST_OBFUSCATED_SCRIPTS) table_stream.open(m_output_path + "obfuscated_scripts.txt");
 
 	std::ofstream stream(m_output_path + "scripts.txt");
 	CPyIter iter = m_scripts.GetIter();
@@ -1727,9 +1693,9 @@ void ModuleSystem::WriteScripts()
 		CPyObject script = m_scripts[i];
 		std::string name = encode_id(script[0].AsString());
 
-		if ((m_flags & msf_obfuscate_scripts) && name.substr(0, 5) != "game_" && name.substr(0, 4) != "wse_")
+		if ((m_flags & MSF_OBFUSCATE_SCRIPTS) && name.substr(0, 5) != "game_" && name.substr(0, 4) != "wse_")
 		{
-			if (m_flags & msf_list_obfuscated_scripts) table_stream << "script_" << i << "=" << name << std::endl;
+			if (m_flags & MSF_LIST_OBFUSCATED_SCRIPTS) table_stream << "script_" << i << "=" << name << std::endl;
 
 			stream << "script_" << i << ' ';
 		}
@@ -1750,12 +1716,12 @@ void ModuleSystem::WriteScripts()
 			fails_at_zero = WriteStatementBlock(script[2], stream, name);
 		}
 
-		if (fails_at_zero && name.substr(0, 3) != "cf_") Warning(wl_warning, "non cf_ script can fail", name);
+		if (fails_at_zero && name.substr(0, 3) != "cf_") Warning(WL_WARNING, "non cf_ script can fail", name);
 
 		stream << std::endl;
 	}
 
-	if (m_flags & msf_list_obfuscated_scripts)
+	if (m_flags & MSF_LIST_OBFUSCATED_SCRIPTS)
 		table_stream.close();
 }
 
@@ -1800,7 +1766,7 @@ void ModuleSystem::WriteSkins()
 
 	if (num_skins > 16)
 	{
-		Warning(wl_warning, "skin count exceeds 6");
+		Warning(WL_WARNING, "skin count exceeds 6");
 		num_skins = 16;
 	}
 
@@ -1814,10 +1780,10 @@ void ModuleSystem::WriteSkins()
 
 		stream << name << ' ';
 		stream << skin[1] << ' ';
-		stream << GetResource(skin[2], res_mesh, name) << ' ';
-		stream << GetResource(skin[3], res_mesh, name) << ' ';
-		stream << GetResource(skin[4], res_mesh, name) << ' ';
-		stream << GetResource(skin[5], res_mesh, name) << ' ';
+		stream << GetResource(skin[2], RES_MESH, name) << ' ';
+		stream << GetResource(skin[3], RES_MESH, name) << ' ';
+		stream << GetResource(skin[4], RES_MESH, name) << ' ';
+		stream << GetResource(skin[5], RES_MESH, name) << ' ';
 
 		CPyObject face_keys = skin[6];
 		CPyIter face_key_iter = face_keys.GetIter();
@@ -1841,28 +1807,28 @@ void ModuleSystem::WriteSkins()
 
 		stream << hair_meshes.Len() << ' ';
 
-		while (hair_mesh_iter.HasNext()) stream << GetResource(hair_mesh_iter.Next(), res_mesh, name) << ' ';
+		while (hair_mesh_iter.HasNext()) stream << GetResource(hair_mesh_iter.Next(), RES_MESH, name) << ' ';
 
 		CPyObject beard_meshes = skin[8];
 		CPyIter beard_mesh_iter = beard_meshes.GetIter();
 
 		stream << beard_meshes.Len() << ' ';
 
-		while (beard_mesh_iter.HasNext()) stream << GetResource(beard_mesh_iter.Next(), res_mesh, name) << ' ';
+		while (beard_mesh_iter.HasNext()) stream << GetResource(beard_mesh_iter.Next(), RES_MESH, name) << ' ';
 
 		CPyObject hair_materials = skin[9];
 		CPyIter hair_material_iter = hair_materials.GetIter();
 
 		stream << hair_materials.Len() << ' ';
 
-		while (hair_material_iter.HasNext()) stream << GetResource(hair_material_iter.Next(), res_material, name) << ' ';
+		while (hair_material_iter.HasNext()) stream << GetResource(hair_material_iter.Next(), RES_MATERIAL, name) << ' ';
 
 		CPyObject beard_materials = skin[10];
 		CPyIter beard_material_iter = beard_materials.GetIter();
 
 		stream << beard_materials.Len() << ' ';
 
-		while (beard_material_iter.HasNext()) stream << GetResource(beard_material_iter.Next(), res_material, name) << ' ';
+		while (beard_material_iter.HasNext()) stream << GetResource(beard_material_iter.Next(), RES_MATERIAL, name) << ' ';
 
 		CPyObject face_textures = skin[11];
 		CPyIter face_texture_iter = face_textures.GetIter();
@@ -1873,7 +1839,7 @@ void ModuleSystem::WriteSkins()
 		{
 			CPyObject face_texture = face_texture_iter.Next();
 
-			stream << GetResource(face_texture[0], res_material, name) << ' ';
+			stream << GetResource(face_texture[0], RES_MATERIAL, name) << ' ';
 			stream << face_texture[1] << ' ';
 
 			CPyObject hair_materials;
@@ -1896,7 +1862,7 @@ void ModuleSystem::WriteSkins()
 			stream << num_hair_materials << ' ';
 			stream << num_hair_colors << ' ';
 
-			for (int i = 0; i < num_hair_materials; ++i) stream << GetResource(hair_materials[i], res_material, name) << ' ';
+			for (int i = 0; i < num_hair_materials; ++i) stream << GetResource(hair_materials[i], RES_MATERIAL, name) << ' ';
 
 			for (int i = 0; i < num_hair_colors; ++i) stream << hair_colors[i] << ' ';
 		}
@@ -1914,7 +1880,7 @@ void ModuleSystem::WriteSkins()
 			stream << encode_id(voice[1].Str()) << ' ';
 		}
 
-		stream << GetResource(skin[13], res_skeleton, name) << ' ';
+		stream << GetResource(skin[13], RES_SKELETON, name) << ' ';
 		stream << skin[14] << ' ';
 
 		if (skin.Len() > 15)
@@ -1954,10 +1920,7 @@ void ModuleSystem::WriteSkins()
 				}
 			}
 		}
-		else
-		{
-			stream << "0 ";
-		}
+		else stream << "0 ";
 
 		stream << std::endl;
 	}
@@ -1977,7 +1940,7 @@ void ModuleSystem::WriteSkyboxes()
 		CPyObject skybox = iter.Next();
 		std::string name = encode_res(skybox[0].AsString());
 
-		stream << GetResource(skybox[0], res_mesh, name) << ' ';
+		stream << GetResource(skybox[0], RES_MESH, name) << ' ';
 		stream << skybox[1] << ' ';
 		stream << skybox[2] << ' ';
 		stream << skybox[3] << ' ';
@@ -2021,7 +1984,7 @@ void ModuleSystem::WriteSounds()
 
 			if (samples.find(file) == samples.end())
 			{
-				samples[file] = (int)samples_vec.size();
+				samples.insert({ file , (int)samples_vec.size() });
 				samples_vec.push_back(file);
 				sample_flags.push_back(sound[1].AsLong());
 			}
@@ -2057,7 +2020,7 @@ void ModuleSystem::WriteSounds()
 
 		if (num_samples > 32)
 		{
-			Warning(wl_warning, "sound sample count exceeds 32", name);
+			Warning(WL_WARNING, "sound sample count exceeds 32", name);
 			num_samples = 32;
 		}
 
@@ -2121,7 +2084,7 @@ void ModuleSystem::WriteTableaus()
 
 		stream << name << ' ';
 		stream << tableau[1] << ' ';
-		stream << GetResource(tableau[2].AsString(), res_material, name) << ' ';
+		stream << GetResource(tableau[2].AsString(), RES_MATERIAL, name) << ' ';
 		stream << tableau[3] << ' ';
 		stream << tableau[4] << ' ';
 		stream << tableau[5] << ' ';
@@ -2163,7 +2126,7 @@ void ModuleSystem::WriteTroops()
 		stream << encode_str(troop[2].AsString()) << ' ';
 
 		if (troop.Len() > 13)
-			stream << GetResource(troop[13].Str(), res_mesh, name) << ' ';
+			stream << GetResource(troop[13].Str(), RES_MESH, name) << ' ';
 		else
 			stream << "0 ";
 
@@ -2275,12 +2238,11 @@ bool ModuleSystem::WriteStatementBlock(const CPyObject &statement_block, std::os
 
 	for (m_cur_statement = 0; m_cur_statement < num_statements; ++m_cur_statement) WriteStatement(statement_block[m_cur_statement], stream, depth, fails_at_zero);
 
-	if (depth != 0) Warning(wl_error, "unexpected try block depth " + itostr(depth), context);
+	if (depth != 0) Warning(WL_ERROR, "unexpected try block depth " + itostr(depth), context);
 
-	for (auto it = m_local_vars.begin(); it != m_local_vars.end(); ++it)
+	for (auto & var : m_local_vars)
 	{
-		if (it->second.usages == 0 && it->first.substr(0, 6) != "unused")
-			Warning(wl_warning, "unused local variable :" + it->first, context);
+		if (var.second.usages == 0 && var.first.substr(0, 6) != "unused") Warning(WL_WARNING, "unused local variable :" + var.first, context);
 	}
 
 	return fails_at_zero;
@@ -2299,7 +2261,7 @@ void ModuleSystem::WriteStatement(const CPyObject &statement, std::ostream &stre
 
 		if (num_operands > 16)
 		{
-			Warning(wl_warning, "operand count exceeds 16", m_cur_context + ", statement " + itostr(m_cur_statement));
+			Warning(WL_WARNING, "operand count exceeds 16", m_cur_context + ", statement " + itostr(m_cur_statement));
 			num_operands = 16;
 		}
 
@@ -2313,12 +2275,11 @@ void ModuleSystem::WriteStatement(const CPyObject &statement, std::ostream &stre
 		stream << opcode << " 0 ";
 	}
 	else
-		Warning(wl_critical, "unrecognized statement type " + (std::string)statement.Type().Str(), m_cur_context + ", statement " + itostr(m_cur_statement));
-	
+		Warning(WL_CRITICAL, "unrecognized statement type " + (std::string)statement.Type().Str(), m_cur_context + ", statement " + itostr(m_cur_statement));
+
 	int operation = opcode & 0xFFFFFFF;
 
 	depth += m_operation_depths[operation];
 
-	if (depth == 0 && m_operations[operation] & optype_cf)
-		fails_at_zero = true;
+	if (depth == 0 && m_operations[operation] & OPTYPE_CF) fails_at_zero = true;
 }

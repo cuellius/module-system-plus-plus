@@ -20,18 +20,18 @@ int main(int argc, char **argv)
 	OptUtils opt(argc, argv);
 	unsigned long long flags = 0;
 
-	if (opt.Has("-strict")) flags |= msf_strict;
-	if (opt.Has("-skip-id-files")) flags |= msf_skip_id_files;
-	if (opt.Has("-list-resources")) flags |= msf_list_resources;
-	if (opt.Has("-hide-global-vars")) flags |= msf_obfuscate_global_vars;
-	if (opt.Has("-hide-scripts")) flags |= msf_obfuscate_scripts;
-	if (opt.Has("-list-obfuscated-scripts")) flags |= msf_list_obfuscated_scripts;
-	if (opt.Has("-hide-dialog-states")) flags |= msf_obfuscate_dialog_states;
-	if (opt.Has("-hide-tags")) flags |= msf_obfuscate_tags;
-	if (opt.Has("-compile-data")) flags |= msf_compile_module_data;
-	if (opt.Has("-list-unreferenced-scripts")) flags |= msf_list_unreferenced_scripts;
-	if (opt.Has("-no-warnings")) flags |= msf_disable_warnings;
-	if (opt.Has("-rusmod_rebalanser")) flags |= msf_rusmod_rebalanser;
+	if (opt.Has("-strict")) flags |= MSF_STRICT;
+	if (opt.Has("-skip-id-files")) flags |= MSF_SKIP_ID_FILES;
+	if (opt.Has("-list-resources")) flags |= MSF_LIST_RESOURCES;
+	if (opt.Has("-hide-global-vars")) flags |= MSF_OBFUSCATE_GLOBAL_VARS;
+	if (opt.Has("-hide-scripts")) flags |= MSF_OBFUSCATE_SCRIPTS;
+	if (opt.Has("-list-obfuscated-scripts")) flags |= MSF_LIST_OBFUSCATED_SCRIPTS;
+	if (opt.Has("-hide-dialog-states")) flags |= MSF_OBFUSCATE_DIALOG_STATES;
+	if (opt.Has("-hide-tags")) flags |= MSF_OBFUSCATE_TAGS;
+	if (opt.Has("-compile-data")) flags |= MSF_COMPILE_MODULE_DATA;
+	if (opt.Has("-list-unreferenced-scripts")) flags |= MSF_LIST_UNREFERENCED_SCRIPTS;
+	if (opt.Has("-no-warnings")) flags |= MSF_DISABLE_WARNINGS;
+	if (opt.Has("-rusmod_rebalanser")) flags |= MSF_RUSMOD_REBALANSER;
 
 	std::string in_path;
 
@@ -56,11 +56,11 @@ int main(int argc, char **argv)
 
 	if (opt.Has("-out-path")) out_path = opt.Get("-out-path");
 
-	std::vector<std::string> leftover = opt.Leftover();
+	auto leftover = opt.Leftover();
 
-	for (auto it = leftover.begin(); it != leftover.end(); ++it) std::cout << "Unrecognized option: " << *it << std::endl;
+	for (auto & it : leftover) std::cout << "Unrecognized option: " << it << std::endl;
 
-	if (leftover.size()) return EXIT_FAILURE;
+	if (!leftover.empty()) return EXIT_FAILURE;
 
 	ModuleSystem ms(in_path, out_path);
 

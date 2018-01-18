@@ -15,6 +15,7 @@ public:
 	CPyObject();
 	CPyObject(PyObject *obj);
 	CPyObject(const CPyObject &cobj);
+	CPyObject(CPyObject &&cobj) noexcept;
 	~CPyObject();
 	CPyObject Call(const CPyTuple &args) const;
 	const CPyObject GetAttr(const CPyString &name) const;
@@ -38,9 +39,10 @@ public:
 	bool IsFloat() const;
 	bool IsNumber() const;
 	PyObject *GetRawObject() const;
-	const CPyObject &operator =(const CPyObject& cobj);
-	bool operator ==(const CPyObject& cobj) const;
-	bool operator !=(const CPyObject& cobj) const;
+	CPyObject &operator =(const CPyObject &cobj);
+	CPyObject &operator =(CPyObject &&cobj) noexcept;
+	bool operator ==(const CPyObject &cobj) const;
+	bool operator !=(const CPyObject &cobj) const;
 	const CPyObject operator [](ssize_t pos) const;
 	operator CPyTuple() const;
 	operator CPyList() const;
@@ -65,7 +67,7 @@ private:
 class CPyException
 {
 public:
-	CPyException(const CPyString &text);
+	explicit CPyException(const CPyString &text);
 	const std::string &GetText() const;
 
 private:
@@ -75,7 +77,7 @@ private:
 class CPyModule : public CPyObject
 {
 public:
-	CPyModule(const CPyString &name);
+	explicit CPyModule(const CPyString &name);
 	CPyModule(PyObject *obj);
 	void Reload();
 };
@@ -154,6 +156,6 @@ public:
 	CPyNumber();
 	CPyNumber(ssize_t val);
 	CPyNumber(PyObject *obj);
-	CPyNumber operator >>(int shift);
+	CPyNumber operator >>(int shift) const;
 	operator unsigned long long() const;
 };

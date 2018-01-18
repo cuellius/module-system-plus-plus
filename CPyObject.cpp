@@ -16,6 +16,12 @@ CPyObject::CPyObject(const CPyObject &cobj) : m_obj(nullptr)
 	Py_XINCREF(m_obj);
 }
 
+CPyObject::CPyObject(CPyObject && cobj) noexcept
+{
+	m_obj = cobj.m_obj;
+	cobj.m_obj = nullptr;
+}
+
 CPyObject::~CPyObject()
 {
 	Py_XDECREF(m_obj);
@@ -137,9 +143,15 @@ PyObject *CPyObject::GetRawObject() const
 	return m_obj;
 }
 
-const CPyObject &CPyObject::operator =(const CPyObject& cobj)
+CPyObject &CPyObject::operator =(const CPyObject& cobj)
 {
 	CopyObject(cobj.m_obj);
+	return *this;
+}
+
+CPyObject &CPyObject::operator=(CPyObject && cobj) noexcept
+{
+	std::swap(m_obj, cobj.m_obj);
 	return *this;
 }
 
@@ -195,24 +207,19 @@ std::ostream &operator <<(std::ostream &stream, const CPyObject &cobj)
 
 int CPyObject::Check2(int val) const
 {
-	if (val == 0)
-		CheckErr();
-
+	if (val == 0) CheckErr();
 	return val;
 }
 
 Py_ssize_t CPyObject::Check3(Py_ssize_t val) const
 {
-	if (val == -1)
-		CheckErr();
-
+	if (val == -1) CheckErr();
 	return val;
 }
 
 PyObject *CPyObject::CheckObj(PyObject *obj) const
 {
 	if (!obj) CheckErr();
-
 	return obj;
 }
 
@@ -270,17 +277,13 @@ const std::string &CPyException::GetText() const
 CPyModule::CPyModule(const CPyString &name)
 {
 	PyObject *module_obj = CheckObj(PyImport_Import(name.GetRawObject()));
-
-	if (!module_obj)
-		throw CPyException("not a module");
-
+	if (!module_obj) throw CPyException("not a module");
 	m_obj = module_obj;
 }
 
 CPyModule::CPyModule(PyObject *obj) : CPyObject(obj)
 {
-	if (!PyModule_Check(m_obj))
-		throw CPyException("not a module");
+	if (!PyModule_Check(m_obj)) throw CPyException("not a module");
 }
 
 void CPyModule::Reload()
@@ -303,9 +306,7 @@ bool CPyIter::HasNext() const
 CPyObject CPyIter::Next()
 {
 	PyObject *cur = m_next;
-	
 	m_next = CheckObj(PyIter_Next(m_obj));
-
 	return cur;
 }
 
@@ -321,8 +322,7 @@ CPyTuple::CPyTuple(ssize_t size)
 
 CPyTuple::CPyTuple(PyObject *obj) : CPyObject(obj)
 {
-	if (!IsTuple())
-		throw CPyException("not a tuple");
+	if (!IsTuple()) throw CPyException("not a tuple");
 }
 
 CPyObject CPyTuple::GetSlice(ssize_t low, ssize_t high) const
@@ -363,8 +363,7 @@ CPyList::CPyList(ssize_t size)
 
 CPyList::CPyList(PyObject *obj) : CPyObject(obj)
 {
-	if (!IsList())
-		throw CPyException("not a list");
+	if (!IsList()) throw CPyException("not a list");
 }
 
 void CPyList::Append(const CPyObject& cobj)
@@ -415,8 +414,7 @@ CPyString::CPyString(const std::string &str)
 
 CPyString::CPyString(PyObject *obj) : CPyObject(obj)
 {
-	if (!IsString())
-		throw CPyException("not a string");
+	if (!IsString()) throw CPyException("not a string");
 }
 
 CPyString::operator std::string() const
@@ -481,7 +479,6 @@ CPyFloat::CPyFloat(double val)
 CPyFloat::CPyFloat(PyObject *obj) : CPyObject(obj)
 {
 	if (PyLong_Check(m_obj)) m_obj = CheckObj(PyFloat_FromDouble(PyLong_AsDouble(m_obj)));
-
 	if (!IsFloat()) throw CPyException("not a float");
 }
 
@@ -505,12 +502,12 @@ CPyNumber::CPyNumber(PyObject *obj) : CPyObject(obj)
 	if (!PyNumber_Check(m_obj)) throw CPyException("not a numbers");
 }
 
-CPyNumber CPyNumber::operator >>(int shift)
+CPyNumber CPyNumber::operator >>(int shift) const
 {
 	return PyNumber_Rshift(m_obj, CheckObj(PyLong_FromLong(shift)));
 }
 
 CPyNumber::operator unsigned long long() const
 {
-	return CPyLong(PyLong_AsUnsignedLongLongMask((PyNumber_Long(m_obj))));
+	return CPyLong(PyLong_AsUnsignedLongLongMask(PyNumber_Long(m_obj)));
 }

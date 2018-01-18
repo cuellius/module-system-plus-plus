@@ -2,9 +2,9 @@
 
 std::string &ltrim(std::string &str, const std::string &chars)
 {
-	int len = (int)str.length();
+	size_t len = str.length();
 
-	for (int i = 0; i < len; ++i)
+	for (size_t i = 0; i < len; ++i)
 	{
 		if (chars.find(str[i]) == std::string::npos)
 		{
@@ -18,9 +18,9 @@ std::string &ltrim(std::string &str, const std::string &chars)
 
 std::string &rtrim(std::string &str, const std::string &chars)
 {
-	int len = (int)str.length();
+	ptrdiff_t len = (ptrdiff_t)str.length();
 
-	for (int i = len - 1; i >= 0; --i)
+	for (ptrdiff_t i = len - 1; i >= 0; --i)
 	{
 		if (chars.find(str[i]) == std::string::npos)
 		{
