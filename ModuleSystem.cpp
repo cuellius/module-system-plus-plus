@@ -2148,7 +2148,13 @@ void ModuleSystem::WriteTroops()
 		CPyObject items = troop[7];
 		int num_items = (int)items.Len();
 
-		for (int i = 0; i < num_items; ++i) stream << GetId("itm", items[i], name) << " 0 ";
+		for (int i = 0; i < num_items; ++i)
+		{
+			if (items[i].IsTuple() || items[i].IsList())
+				stream << GetId("itm", items[i][0], name) << ' ' << ((long)items[i][1].AsLong() << 24) << ' ';
+			else
+				stream << GetId("itm", items[i], name) << " 0 ";
+		}
 
 		for (int i = num_items; i < 64; ++i) stream << "-1 0 ";
 
